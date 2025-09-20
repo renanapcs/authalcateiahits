@@ -1,0 +1,32 @@
+{
+  "name": "alcateia-mvp-backend",
+  "description": "Alcatéia Hits MVP - Backend com OpenAuth e MercadoPago",
+  "private": true,
+  "version": "1.0.0",
+  "cloudflare": {
+    "label": "Alcatéia Hits MVP Backend",
+    "products": ["Workers", "D1", "KV"],
+    "categories": [],
+    "icon_urls": ["https://alcateiahits.org/src/img/loboalpha80px.png"],
+    "publish": true
+  },
+  "dependencies": {
+    "@openauthjs/openauth": "0.4.3",
+    "valibot": "^1.0.0-beta.9"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3",
+    "wrangler": "^4.38.0",
+    "@types/node": "^20.0.0"
+  },
+  "scripts": {
+    "cf-typegen": "wrangler types",
+    "check": "tsc && wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "predeploy": "wrangler d1 migrations apply AUTH_DB --remote",
+    "db:migrate": "wrangler d1 migrations apply --remote alcateia-mvp-db",
+    "db:local": "wrangler d1 migrations apply --local alcateia-mvp-db",
+    "tail": "wrangler tail --format=pretty"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "compatibility_date": "2025-01-20",
+  "main": "src/index.ts",
+  "name": "alcateia-mvp-backend",
+  "upload_source_maps": true,
+  "kv_namespaces": [
+    {
+      "binding": "AUTH_STORAGE",
+      "id": "YOUR_KV_NAMESPACE_ID"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "AUTH_DB",
+      "database_name": "alcateia-mvp-db",
+      "database_id": "YOUR_D1_DATABASE_ID"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "FRONTEND_DOMAIN": "https://alcateiahits.org",
+    "AUTH_DOMAIN": "https://auth.alcateiahits.org",
+    "ALLOWED_ORIGINS": "https://alcateiahits.org,https://www.alcateiahits.org,http://localhost:80,http://localhost:3000"
+  }
+}
