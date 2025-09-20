@@ -3,7 +3,7 @@ import { CloudflareStorage } from "@openauthjs/openauth/storage/cloudflare";
 import { PasswordProvider } from "@openauthjs/openauth/provider/password";
 import { PasswordUI } from "@openauthjs/openauth/ui/password";
 import { createSubjects } from "@openauthjs/openauth/subject";
-import { object, string, enum as enumType, number } from "valibot";
+import { object, string, enum as enumType, number, boolean } from "valibot";
 import { EmailService } from "./email-service";
 import { EmailVerificationManager } from "./verification-service";
 
@@ -45,10 +45,16 @@ export default {
       'http://localhost:3000'
     ];
     
+    // Determine the allowed origin
+    let allowedOrigin = env.FRONTEND_DOMAIN || 'https://alcateiahits.org';
+    if (origin && allowedOrigins.includes(origin)) {
+      allowedOrigin = origin;
+    }
+    
     const corsHeaders = {
-      'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : env.FRONTEND_DOMAIN || 'https://alcateiahits.org',
+      'Access-Control-Allow-Origin': allowedOrigin,
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
       'Access-Control-Allow-Credentials': 'true',
     };
 
@@ -94,14 +100,16 @@ export default {
       url.pathname = "/authorize";
       return Response.redirect(url.toString());
     } else if (url.pathname === "/callback") {
-      return Response.json({
+      return new Response(JSON.stringify({
         message: "OAuth flow complete!",
         params: Object.fromEntries(url.searchParams.entries()),
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
     // The real OpenAuth server code starts here:
-    return issuer({
+    const response = await issuer({
       storage: CloudflareStorage({
         namespace: env.AUTH_STORAGE,
       }),
@@ -171,6 +179,18 @@ export default {
         });
       },
     }).fetch(request, env, ctx);
+
+    // Add CORS headers to the OpenAuth response
+    const newHeaders = new Headers(response.headers);
+    Object.entries(corsHeaders).forEach(([key, value]) => {
+      newHeaders.set(key, value);
+    });
+
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders,
+    });
   },
 } satisfies ExportedHandler<Env>;
 
