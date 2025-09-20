@@ -118,8 +118,8 @@ export default {
                   port: 587,
                   secure: false,
                   auth: {
-                    user: env.SMTP_USER || 'alcateiahits@gmail.com',
-                    pass: env.SMTP_PASS || 'xpsr ijar ztrp duse'
+                    user: env['SMTP_USER'] || 'alcateiahits@gmail.com',
+                    pass: env['SMTP_PASS'] || 'xpsr ijar ztrp duse'
                   }
                 });
 
@@ -257,8 +257,8 @@ async function handleEmailAPI(request: Request, env: Env, corsHeaders: Record<st
         port: 587,
         secure: false,
         auth: {
-          user: env.SMTP_USER || 'alcateiahits@gmail.com',
-          pass: env.SMTP_PASS || 'xpsr ijar ztrp duse'
+          user: env['SMTP_USER'] || 'alcateiahits@gmail.com',
+          pass: env['SMTP_PASS'] || 'xpsr ijar ztrp duse'
         }
       });
 
@@ -300,8 +300,8 @@ async function handleEmailAPI(request: Request, env: Env, corsHeaders: Record<st
         port: 587,
         secure: false,
         auth: {
-          user: env.SMTP_USER || 'alcateiahits@gmail.com',
-          pass: env.SMTP_PASS || 'xpsr ijar ztrp duse'
+          user: env['SMTP_USER'] || 'alcateiahits@gmail.com',
+          pass: env['SMTP_PASS'] || 'xpsr ijar ztrp duse'
         }
       });
 
@@ -341,8 +341,8 @@ async function handleEmailAPI(request: Request, env: Env, corsHeaders: Record<st
         port: 587,
         secure: false,
         auth: {
-          user: env.SMTP_USER || 'alcateiahits@gmail.com',
-          pass: env.SMTP_PASS || 'xpsr ijar ztrp duse'
+          user: env['SMTP_USER'] || 'alcateiahits@gmail.com',
+          pass: env['SMTP_PASS'] || 'xpsr ijar ztrp duse'
         }
       });
 

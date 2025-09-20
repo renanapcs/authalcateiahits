@@ -23,8 +23,6 @@
   "vars": {
     "FRONTEND_DOMAIN": "https://alcateiahits.org",
     "AUTH_DOMAIN": "https://auth.alcateiahits.org",
-    "ALLOWED_ORIGINS": "https://alcateiahits.org,https://www.alcateiahits.org,http://localhost:80,http://localhost:3000",
-    "SMTP_USER": "alcateiahits@gmail.com",
-    "SMTP_PASS": "xpsr ijar ztrp duse"
+    "ALLOWED_ORIGINS": "https://alcateiahits.org,https://www.alcateiahits.org,http://localhost:80,http://localhost:3000"
   }
 }
