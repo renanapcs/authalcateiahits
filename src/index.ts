@@ -4,6 +4,8 @@ import { PasswordProvider } from "@openauthjs/openauth/provider/password";
 import { PasswordUI } from "@openauthjs/openauth/ui/password";
 import { createSubjects } from "@openauthjs/openauth/subject";
 import { object, string, enum as enumType, number } from "valibot";
+import { EmailService } from "./email-service";
+import { EmailVerificationManager } from "./verification-service";
 
 // This value should be shared between the OpenAuth server Worker and other
 // client Workers that you connect to it, so the types and schema validation are
@@ -12,6 +14,11 @@ const subjects = createSubjects({
   user: object({
     id: string(),
     email: string(),
+    email_verified: object({
+      verified: boolean,
+      verification_code: string().optional(),
+      verification_expires_at: string().optional(),
+    }).optional(),
     subscription: object({
       id: string(),
       plan_type: enumType(['start', 'plus', 'premium']),
@@ -64,6 +71,11 @@ export default {
       return handleContentAPI(request, env, corsHeaders);
     }
 
+    // Email verification APIs
+    if (url.pathname.startsWith('/api/email')) {
+      return handleEmailAPI(request, env, corsHeaders);
+    }
+
     // MercadoPago webhook
     if (url.pathname === '/api/webhooks/mercadopago') {
       return handleMercadoPagoWebhook(request, env, corsHeaders);
@@ -99,13 +111,39 @@ export default {
           PasswordUI({
             // eslint-disable-next-line @typescript-eslint/require-await
             sendCode: async (email, code) => {
-              // This is where you would email the verification code to the
-              // user, e.g. using Resend:
-              // https://resend.com/docs/send-with-cloudflare-workers
-              console.log(`Sending code ${code} to ${email}`);
+              try {
+                // Configurar o serviço de email
+                const emailService = new EmailService({
+                  host: 'smtp.gmail.com',
+                  port: 587,
+                  secure: false,
+                  auth: {
+                    user: env.SMTP_USER || 'alcateiahits@gmail.com',
+                    pass: env.SMTP_PASS || 'xpsr ijar ztrp duse'
+                  }
+                });
+
+                // Criar template de verificação
+                const template = emailService.createVerificationTemplate(code, email);
+                
+                // Enviar email
+                const success = await emailService.sendEmail(email, template);
+                
+                if (success) {
+                  console.log(`Verification code sent successfully to ${email}`);
+                  
+                  // Log do envio
+                  const verificationManager = new EmailVerificationManager(env.AUTH_DB);
+                  await verificationManager.logEmailSent('', 'verification', email, 'sent');
+                } else {
+                  console.error(`Failed to send verification code to ${email}`);
+                }
+              } catch (error) {
+                console.error('Error sending verification code:', error);
+              }
             },
             copy: {
-              input_code: "Code (check Worker logs)",
+              input_code: "Digite o código enviado para seu email",
             },
           }),
         ),
@@ -123,10 +161,12 @@ export default {
       success: async (ctx, value) => {
         const userId = await getOrCreateUser(env, value.email);
         const subscription = await getUserSubscription(env, userId);
+        const emailVerification = await getEmailVerificationStatus(env, userId);
         
         return ctx.subject("user", {
           id: userId,
           email: value.email,
+          email_verified: emailVerification,
           subscription: subscription,
         });
       },
@@ -179,6 +219,154 @@ async function getUserSubscription(env: Env, userId: string) {
       domain_registration: subscription.domain_registration || 0,
     },
   };
+}
+
+async function getEmailVerificationStatus(env: Env, userId: string) {
+  const user = await env.AUTH_DB.prepare(`
+    SELECT email_verified, verification_code, verification_expires_at
+    FROM user WHERE id = ?
+  `).bind(userId).first<{ 
+    email_verified: boolean; 
+    verification_code: string | null; 
+    verification_expires_at: string | null 
+  }>();
+
+  if (!user) return null;
+
+  return {
+    verified: user.email_verified,
+    verification_code: user.verification_code,
+    verification_expires_at: user.verification_expires_at,
+  };
+}
+
+// Email API handlers
+async function handleEmailAPI(request: Request, env: Env, corsHeaders: Record<string, string>) {
+  const url = new URL(request.url);
+  const verificationManager = new EmailVerificationManager(env.AUTH_DB);
+  
+  // Iniciar verificação de email
+  if (request.method === 'POST' && url.pathname === '/api/email/verify') {
+    const body = await request.json() as { email: string };
+    const result = await verificationManager.initiateEmailVerification(body.email);
+    
+    if (result.success) {
+      // Enviar email com código
+      const emailService = new EmailService({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: env.SMTP_USER || 'alcateiahits@gmail.com',
+          pass: env.SMTP_PASS || 'xpsr ijar ztrp duse'
+        }
+      });
+
+      // Buscar código do usuário
+      const user = await env.AUTH_DB.prepare(`
+        SELECT verification_code FROM user WHERE email = ?
+      `).bind(body.email).first<{ verification_code: string }>();
+
+      if (user?.verification_code) {
+        const template = emailService.createVerificationTemplate(user.verification_code, body.email);
+        await emailService.sendEmail(body.email, template);
+      }
+    }
+    
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  // Verificar código de email
+  if (request.method === 'POST' && url.pathname === '/api/email/verify-code') {
+    const body = await request.json() as { email: string; code: string };
+    const result = await verificationManager.verifyEmailCode(body.email, body.code);
+    
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  // Iniciar recuperação de senha
+  if (request.method === 'POST' && url.pathname === '/api/email/password-reset') {
+    const body = await request.json() as { email: string };
+    const result = await verificationManager.initiatePasswordReset(body.email);
+    
+    if (result.success) {
+      // Enviar email com código de recuperação
+      const emailService = new EmailService({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: env.SMTP_USER || 'alcateiahits@gmail.com',
+          pass: env.SMTP_PASS || 'xpsr ijar ztrp duse'
+        }
+      });
+
+      // Buscar código do usuário
+      const user = await env.AUTH_DB.prepare(`
+        SELECT password_reset_code FROM user WHERE email = ?
+      `).bind(body.email).first<{ password_reset_code: string }>();
+
+      if (user?.password_reset_code) {
+        const template = emailService.createPasswordRecoveryTemplate(user.password_reset_code, body.email);
+        await emailService.sendEmail(body.email, template);
+      }
+    }
+    
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  // Verificar código de recuperação de senha
+  if (request.method === 'POST' && url.pathname === '/api/email/verify-reset-code') {
+    const body = await request.json() as { email: string; code: string };
+    const result = await verificationManager.verifyPasswordResetCode(body.email, body.code);
+    
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  // Enviar email de boas-vindas
+  if (request.method === 'POST' && url.pathname === '/api/email/welcome') {
+    const body = await request.json() as { email: string };
+    
+    try {
+      const emailService = new EmailService({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: env.SMTP_USER || 'alcateiahits@gmail.com',
+          pass: env.SMTP_PASS || 'xpsr ijar ztrp duse'
+        }
+      });
+
+      const template = emailService.createWelcomeTemplate(body.email);
+      const success = await emailService.sendEmail(body.email, template);
+      
+      return new Response(JSON.stringify({ 
+        success, 
+        message: success ? 'Email de boas-vindas enviado' : 'Falha ao enviar email' 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: 'Erro interno do servidor' 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  return new Response('Not Found', { status: 404, headers: corsHeaders });
 }
 
 // Subscription API handlers
