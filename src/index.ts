@@ -3,7 +3,7 @@ import { CloudflareStorage } from "@openauthjs/openauth/storage/cloudflare";
 import { PasswordProvider } from "@openauthjs/openauth/provider/password";
 import { PasswordUI } from "@openauthjs/openauth/ui/password";
 import { createSubjects } from "@openauthjs/openauth/subject";
-import { object, string, enum as enumType, number, boolean } from "valibot";
+import { object, string, union, number, boolean, optional, literal } from "valibot";
 import { EmailService } from "./email-service";
 import { EmailVerificationManager } from "./verification-service";
 
@@ -14,21 +14,21 @@ const subjects = createSubjects({
   user: object({
     id: string(),
     email: string(),
-    email_verified: object({
-      verified: boolean,
-      verification_code: string().optional(),
-      verification_expires_at: string().optional(),
-    }).optional(),
-    subscription: object({
+    email_verified: optional(object({
+      verified: boolean(),
+      verification_code: optional(string()),
+      verification_expires_at: optional(string()),
+    })),
+    subscription: optional(object({
       id: string(),
-      plan_type: enumType(['start', 'plus', 'premium']),
-      status: enumType(['active', 'cancelled', 'expired', 'pending']),
+      plan_type: union([literal('start'), literal('plus'), literal('premium')]),
+      status: union([literal('active'), literal('cancelled'), literal('expired'), literal('pending')]),
       features: object({
         music_limit: number(),
         producer_sessions: number(),
         domain_registration: number(),
       }),
-    }).optional(),
+    })),
   }),
 });
 
@@ -173,8 +173,8 @@ export default {
         return ctx.subject("user", {
           id: userId,
           email: value.email,
-          email_verified: emailVerification,
-          subscription: subscription,
+          email_verified: emailVerification || undefined,
+          subscription: subscription || undefined,
         });
       },
     }).fetch(request, env, ctx);
@@ -229,13 +229,13 @@ async function getUserSubscription(env: Env, userId: string) {
   if (!subscription) return null;
 
   return {
-    id: subscription.id,
-    plan_type: subscription.plan_type,
-    status: subscription.status,
+    id: subscription.id as string,
+    plan_type: subscription.plan_type as 'start' | 'plus' | 'premium',
+    status: subscription.status as 'active' | 'cancelled' | 'expired' | 'pending',
     features: {
-      music_limit: subscription.music_limit || 0,
-      producer_sessions: subscription.producer_sessions || 0,
-      domain_registration: subscription.domain_registration || 0,
+      music_limit: Number(subscription.music_limit) || 0,
+      producer_sessions: Number(subscription.producer_sessions) || 0,
+      domain_registration: Number(subscription.domain_registration) || 0,
     },
   };
 }
@@ -254,8 +254,8 @@ async function getEmailVerificationStatus(env: Env, userId: string) {
 
   return {
     verified: user.email_verified,
-    verification_code: user.verification_code,
-    verification_expires_at: user.verification_expires_at,
+    verification_code: user.verification_code || undefined,
+    verification_expires_at: user.verification_expires_at || undefined,
   };
 }
 
@@ -410,16 +410,18 @@ async function handleSubscriptionAPI(request: Request, env: Env, corsHeaders: Re
 
     const features = planFeatures[body.plan_type as keyof typeof planFeatures];
     
-    await env.AUTH_DB.prepare(`
-      INSERT INTO subscription_features (subscription_id, feature_type, feature_value)
-      VALUES (?, 'music_limit', ?), (?, 'producer_sessions', ?), (?, 'domain_registration', ?)
-    `).bind(
-      subscription.id, features.music_limit,
-      subscription.id, features.producer_sessions,
-      subscription.id, features.domain_registration
-    ).run();
+    if (subscription?.id) {
+      await env.AUTH_DB.prepare(`
+        INSERT INTO subscription_features (subscription_id, feature_type, feature_value)
+        VALUES (?, 'music_limit', ?), (?, 'producer_sessions', ?), (?, 'domain_registration', ?)
+      `).bind(
+        subscription.id, features.music_limit,
+        subscription.id, features.producer_sessions,
+        subscription.id, features.domain_registration
+      ).run();
+    }
 
-    return new Response(JSON.stringify({ subscription_id: subscription.id }), {
+    return new Response(JSON.stringify({ subscription_id: subscription?.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
@@ -454,7 +456,7 @@ async function handleProducerSessionAPI(request: Request, env: Env, corsHeaders:
       RETURNING id
     `).bind(body.subscription_id, body.producer_name, body.session_date, body.notes || null).first();
 
-    return new Response(JSON.stringify({ session_id: session.id }), {
+    return new Response(JSON.stringify({ session_id: session?.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
@@ -519,7 +521,7 @@ async function handleMercadoPagoWebhook(request: Request, env: Env, corsHeaders:
   }
 
   try {
-    const body = await request.json();
+    const body = await request.json() as any;
     
     // Handle subscription payment notifications
     if (body.type === 'subscription') {

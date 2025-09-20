@@ -5,8 +5,8 @@ export interface VerificationCode {
 
 export class VerificationService {
   private static readonly CODE_LENGTH = 6;
-  private static readonly VERIFICATION_EXPIRY_MINUTES = 10;
-  private static readonly PASSWORD_RESET_EXPIRY_MINUTES = 15;
+  public static readonly VERIFICATION_EXPIRY_MINUTES = 10;
+  public static readonly PASSWORD_RESET_EXPIRY_MINUTES = 15;
 
   /**
    * Gera um código de verificação numérico
@@ -276,7 +276,7 @@ export class EmailVerificationManager {
   /**
    * Registra o envio de um email
    */
-  private async logEmailSent(
+  public async logEmailSent(
     userId: string, 
     emailType: string, 
     recipientEmail: string, 
