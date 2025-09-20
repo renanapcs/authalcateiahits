@@ -19,5 +19,10 @@
   "observability": {
     "enabled": true
   },
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "FRONTEND_DOMAIN": "https://alcateiahits.org",
+    "AUTH_DOMAIN": "https://auth.alcateiahits.org",
+    "ALLOWED_ORIGINS": "https://alcateiahits.org,https://www.alcateiahits.org,http://localhost:80,http://localhost:3000"
+  }
 }
